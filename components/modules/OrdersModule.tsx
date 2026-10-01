@@ -1,23 +1,26 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAdmin } from '@/lib/admin-context';
 import { Order } from '@/lib/types';
+import { toast as sonnerToast } from 'sonner';
 import {
-  ShoppingBag,
-  Filter,
   Download,
-  AlertOctagon,
-  Printer,
+  AlertTriangle,
   RotateCcw,
   CheckCircle2,
   Clock,
   ExternalLink,
   ShieldAlert,
   Headset,
+  Printer,
+  ChevronRight,
+  Sparkles,
 } from 'lucide-react';
 
 export default function OrdersModule() {
+  const router = useRouter();
   const {
     orders,
     selectedOrderId,
@@ -30,24 +33,40 @@ export default function OrdersModule() {
     toast,
   } = useAdmin();
 
-  // Filter states
-  const [filterStatus, setFilterStatus] = useState<string>('ALL');
-  const [filterMachine, setFilterMachine] = useState<string>('ALL');
-  const [filterPayment, setFilterPayment] = useState<string>('ALL');
-  const [flaggedOnly, setFlaggedOnly] = useState(false);
-
-  // Print stub modal
+  // Filter chips: All Orders, Unredeemed Codes, Failed Dispenses, Disputed Orders
+  const [chipFilter, setChipFilter] = useState<'ALL' | 'UNREDEEMED' | 'FAILED' | 'DISPUTED'>('ALL');
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [stubOrder, setStubOrder] = useState<Order | null>(null);
 
   const activeOrder = orders.find((o) => o.id === selectedOrderId) || null;
 
   const filteredOrders = orders.filter((o) => {
-    if (filterStatus !== 'ALL' && o.status !== filterStatus) return false;
-    if (filterMachine !== 'ALL' && o.machineId !== filterMachine) return false;
-    if (filterPayment !== 'ALL' && o.paymentMethod !== filterPayment) return false;
-    if (flaggedOnly && !o.isFlagged) return false;
+    if (chipFilter === 'UNREDEEMED') return o.status === 'Pending' || o.status === 'Preparing';
+    if (chipFilter === 'FAILED') return Math.abs(o.dispenseLog.variancePct) > 15 || o.status === 'Cancelled';
+    if (chipFilter === 'DISPUTED') return o.isFlagged;
     return true;
   });
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedOrderIds(filteredOrders.map((o) => o.id));
+    } else {
+      setSelectedOrderIds([]);
+    }
+  };
+
+  const toggleSelectRow = (id: string) => {
+    setSelectedOrderIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkRefund = () => {
+    if (selectedOrderIds.length === 0) return;
+    selectedOrderIds.forEach((id) => refundOrder(id, 'FLOAT_WALLET'));
+    sonnerToast.success(`Bulk refund issued for ${selectedOrderIds.length} orders directly to Float Wallets.`);
+    setSelectedOrderIds([]);
+  };
 
   const exportOrdersCSV = () => {
     let csv = `Order No,Time,Machine,Variant,Amount,Discount,Net,Payment,Status,Flagged,UTR\n`;
@@ -58,28 +77,29 @@ export default function OrdersModule() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Orders_Export_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `Orders_Export_${Date.now()}.csv`;
     a.click();
-    toast('Orders exported to CSV', 'success');
+    URL.revokeObjectURL(url);
+    sonnerToast.success(`Exported ${filteredOrders.length} orders to CSV`);
   };
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-[1600px] mx-auto">
-      {/* Top Header */}
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-[24px] font-bold tracking-tight text-ink-900">
-            Live Orders Queue &amp; Dispense Logs
+          <h1 className="text-[26px] font-bold tracking-tight text-ink-900 leading-tight">
+            Order Queue &amp; Dispense Logs
           </h1>
-          <p className="text-[13px] text-ink-500 mt-0.5">
-            Full sensor telemetry for every pour: valve milliseconds, pulses, and variance audit.
+          <p className="text-[13px] text-ink-500 mt-1">
+            Real-time telemetry queue tracking flow pulses, valve milliseconds, and automated dispute flags.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={exportOrdersCSV}
-            className="flex items-center gap-1.5 px-3 py-2 bg-white border border-line rounded-lg text-xs font-semibold text-ink-700 hover:bg-page transition shadow-xs cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-line rounded-lg text-xs font-semibold text-ink-700 hover:bg-ink-50 transition shadow-xs cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export CSV</span>
@@ -87,141 +107,232 @@ export default function OrdersModule() {
         </div>
       </div>
 
-      {/* Filter Toolbar */}
-      <div className="card p-3 sm:p-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <div className="flex items-center gap-1.5 text-ink-500 mr-2 font-medium">
-            <Filter className="w-3.5 h-3.5" />
-            <span>Filter by:</span>
-          </div>
-
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-2.5 py-1.5 border border-line rounded-lg bg-page text-ink-700"
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="Completed">Completed</option>
-            <option value="Preparing">Preparing</option>
-            <option value="Cancelled">Cancelled</option>
-          </select>
-
-          <select
-            value={filterMachine}
-            onChange={(e) => setFilterMachine(e.target.value)}
-            className="px-2.5 py-1.5 border border-line rounded-lg bg-page text-ink-700"
-          >
-            <option value="ALL">All Machines</option>
-            <option value="MCH-001">Campus Hub (MCH-001)</option>
-            <option value="MCH-002">Mall Lane (MCH-002)</option>
-          </select>
-
-          <select
-            value={filterPayment}
-            onChange={(e) => setFilterPayment(e.target.value)}
-            className="px-2.5 py-1.5 border border-line rounded-lg bg-page text-ink-700"
-          >
-            <option value="ALL">All Payments</option>
-            <option value="UPI">UPI (GPay / PhonePe)</option>
-            <option value="Wallet">In-App Float Wallet</option>
-            <option value="Coins">Ad Reward Coins</option>
-          </select>
+      {/* Top Filter Chips */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-line shadow-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-ink-500 font-semibold mr-1">Filter Queue:</span>
 
           <button
-            onClick={() => setFlaggedOnly(!flaggedOnly)}
-            className={`px-3 py-1.5 rounded-lg border transition font-medium ${
-              flaggedOnly
-                ? 'bg-rose-50 border-rose-300 text-rose-700 font-semibold'
-                : 'border-line text-ink-600 hover:bg-page'
+            onClick={() => setChipFilter('ALL')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+              chipFilter === 'ALL'
+                ? 'bg-brand-500 text-white shadow-xs'
+                : 'bg-ink-100 text-ink-700 hover:bg-ink-200'
             }`}
           >
-            Disputed / Flagged Only
+            All Orders ({orders.length})
+          </button>
+
+          <button
+            onClick={() => setChipFilter('UNREDEEMED')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+              chipFilter === 'UNREDEEMED'
+                ? 'bg-brand-500 text-white shadow-xs'
+                : 'bg-ink-100 text-ink-700 hover:bg-ink-200'
+            }`}
+          >
+            Unredeemed Codes ({orders.filter((o) => o.status === 'Pending' || o.status === 'Preparing').length})
+          </button>
+
+          <button
+            onClick={() => setChipFilter('FAILED')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+              chipFilter === 'FAILED'
+                ? 'bg-rose-600 text-white shadow-xs'
+                : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
+            }`}
+          >
+            Failed Dispenses ({orders.filter((o) => Math.abs(o.dispenseLog.variancePct) > 15 || o.status === 'Cancelled').length})
+          </button>
+
+          <button
+            onClick={() => setChipFilter('DISPUTED')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+              chipFilter === 'DISPUTED'
+                ? 'bg-amber-500 text-white shadow-xs'
+                : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
+            }`}
+          >
+            <AlertTriangle className="w-3 h-3 text-amber-600 fill-amber-500" />
+            <span>Disputed Orders ({orders.filter((o) => o.isFlagged).length})</span>
           </button>
         </div>
 
         <span className="text-xs text-ink-400 font-mono">
-          Showing {filteredOrders.length} of {orders.length} orders
+          Showing {filteredOrders.length} records
         </span>
       </div>
 
-      {/* Main Layout: Orders Table + Slideover Detail */}
+      {/* Floating Bulk Action Drawer if selected */}
+      {selectedOrderIds.length > 0 && (
+        <div className="bg-ink-950 text-white px-5 py-3 rounded-xl shadow-2xl flex flex-wrap items-center justify-between gap-4 border border-ink-800 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-brand-400 animate-pulse" />
+            <span className="text-sm font-semibold">
+              {selectedOrderIds.length} orders selected for batch processing
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleBulkRefund}
+              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition shadow-xs cursor-pointer flex items-center gap-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Bulk Refund ({selectedOrderIds.length})</span>
+            </button>
+            <button
+              onClick={() => setSelectedOrderIds([])}
+              className="px-3 py-1.5 bg-ink-800 hover:bg-ink-700 text-ink-300 text-xs font-medium rounded-lg transition cursor-pointer"
+            >
+              Clear Selection
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Order Queue Table */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Table view (2 cols or 3 cols depending on selection) */}
         <div
           className={`${
             activeOrder ? 'lg:col-span-2' : 'lg:col-span-3'
-          } card overflow-hidden border-line transition-all`}
+          } card overflow-hidden border-line transition-all bg-white`}
         >
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-page border-b border-line text-ink-400 font-semibold uppercase tracking-wider text-[10px]">
+              <thead className="bg-ink-50/80 border-b border-line text-ink-500 font-bold uppercase tracking-wider text-[10px]">
                 <tr>
+                  <th className="py-3 px-3 w-8">
+                    <input
+                      type="checkbox"
+                      checked={
+                        filteredOrders.length > 0 &&
+                        selectedOrderIds.length === filteredOrders.length
+                      }
+                      onChange={handleSelectAll}
+                      className="rounded border-ink-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                    />
+                  </th>
                   <th className="py-3 px-4">Order No</th>
                   <th className="py-3 px-4">Time</th>
                   <th className="py-3 px-4">Machine</th>
                   <th className="py-3 px-4">Variant</th>
-                  <th className="py-3 px-4">Net (₹)</th>
-                  <th className="py-3 px-4">Payment</th>
+                  <th className="py-3 px-4">Amount</th>
+                  <th className="py-3 px-4">Payment Method</th>
                   <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-3 text-center">Flag</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {filteredOrders.map((o) => {
                   const isSelected = activeOrder?.id === o.id;
+                  const isRowChecked = selectedOrderIds.includes(o.id);
+
                   return (
                     <tr
                       key={o.id}
                       onClick={() => setSelectedOrderId(o.id)}
                       className={`cursor-pointer transition ${
                         isSelected
-                          ? 'bg-brand-50/60 font-medium'
-                          : 'hover:bg-page/60'
+                          ? 'bg-brand-50/70 font-medium'
+                          : isRowChecked
+                          ? 'bg-brand-50/30'
+                          : 'hover:bg-ink-50/60'
                       }`}
                     >
-                      <td className="py-3 px-4 font-mono font-bold text-ink-900 flex items-center gap-1.5">
-                        {o.isFlagged && (
-                          <ShieldAlert className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                        )}
-                        <span>{o.orderNo}</span>
+                      {/* Checkbox */}
+                      <td className="py-3.5 px-3" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isRowChecked}
+                          onChange={() => toggleSelectRow(o.id)}
+                          className="rounded border-ink-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                        />
                       </td>
-                      <td className="py-3 px-4 text-ink-500 font-mono">{o.time}</td>
-                      <td className="py-3 px-4 text-ink-700 font-medium">
+
+                      {/* Order No */}
+                      <td className="py-3.5 px-4 font-mono font-bold text-ink-900">
+                        {o.orderNo}
+                      </td>
+
+                      {/* Time */}
+                      <td className="py-3.5 px-4 text-ink-500 font-mono">
+                        {o.time}
+                      </td>
+
+                      {/* Machine */}
+                      <td className="py-3.5 px-4 text-ink-700 font-medium truncate max-w-[140px]">
                         {o.machineName}
                       </td>
-                      <td className="py-3 px-4 font-semibold text-ink-900">
+
+                      {/* Variant */}
+                      <td className="py-3.5 px-4 font-semibold text-ink-900">
                         {o.variant}
                       </td>
-                      <td className="py-3 px-4 font-mono font-bold text-ink-900">
-                        ₹{o.netAmount}
+
+                      {/* Amount */}
+                      <td className="py-3.5 px-4 font-mono font-bold text-ink-900">
+                        ₹{o.netAmount.toFixed(2)}
                       </td>
-                      <td className="py-3 px-4">
-                        <span className="bg-page border border-line px-2 py-0.5 rounded text-[11px] font-mono">
+
+                      {/* Payment Method */}
+                      <td className="py-3.5 px-4">
+                        <span className="bg-ink-100 border border-ink-200 px-2 py-0.5 rounded text-[11px] font-mono text-ink-800">
                           {o.paymentMethod}
                         </span>
                       </td>
-                      <td className="py-3 px-4">
+
+                      {/* Status */}
+                      <td className="py-3.5 px-4">
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${
                             o.status === 'Completed'
-                              ? 'bg-leaf-50 text-leaf-600'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                               : o.status === 'Preparing'
-                              ? 'bg-amber2-50 text-amber2-600'
-                              : 'bg-rose-50 text-rose-600'
+                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                              : 'bg-rose-50 text-rose-700 border border-rose-200'
                           }`}
                         >
+                          <span
+                            className={`w-1 h-1 rounded-full ${
+                              o.status === 'Completed'
+                                ? 'bg-emerald-500'
+                                : o.status === 'Preparing'
+                                ? 'bg-amber-500 animate-pulse'
+                                : 'bg-rose-500'
+                            }`}
+                          />
                           {o.status}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-right">
+
+                      {/* Flag Column */}
+                      <td className="py-3.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        {o.isFlagged ? (
+                          <button
+                            onClick={() => router.push('/support/tickets/TCK-8921')}
+                            className="inline-flex items-center justify-center p-1 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-800 transition cursor-pointer animate-bounce"
+                            title="Dispute Ticket Active — Click to Inspect in Dispute Desk"
+                          >
+                            <AlertTriangle className="w-4 h-4 text-amber-600 fill-amber-500" />
+                          </button>
+                        ) : (
+                          <span className="text-ink-300 font-mono text-xs">—</span>
+                        )}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3.5 px-4 text-right">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedOrderId(o.id);
                           }}
-                          className="text-brand-500 hover:text-brand-600 font-semibold"
+                          className="text-brand-600 hover:text-brand-700 font-semibold inline-flex items-center gap-1"
                         >
-                          Inspect →
+                          <span>Inspect</span>
+                          <ChevronRight className="w-3 h-3" />
                         </button>
                       </td>
                     </tr>
@@ -232,7 +343,7 @@ export default function OrdersModule() {
           </div>
         </div>
 
-        {/* Order Detail Pane (/orders/:id - The Evidence Page) */}
+        {/* Slideover Detail when an Order is Clicked */}
         {activeOrder && (
           <div className="card p-5 border-line space-y-5 lg:col-span-1 bg-white">
             <div className="flex items-center justify-between pb-3 border-b border-line">
@@ -246,226 +357,118 @@ export default function OrdersModule() {
               </div>
               <button
                 onClick={() => setSelectedOrderId(null)}
-                className="text-ink-400 hover:text-ink-700 text-sm"
+                className="text-ink-400 hover:text-ink-700 text-sm font-semibold"
               >
-                ✕
+                ✕ Close
               </button>
             </div>
 
-            {/* Buyer & Machine Cross-links */}
-            <div className="bg-page/70 rounded-xl p-3 space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-ink-500">Customer:</span>
+            {/* Buyer context */}
+            <div className="p-3 bg-page rounded-xl border border-line space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-ink-500">Customer:</span>
                 <button
-                  onClick={() =>
-                    activeOrder.buyerId && navigateToCustomer(activeOrder.buyerId)
-                  }
-                  className="font-bold text-brand-600 hover:underline flex items-center gap-1"
+                  onClick={() => activeOrder.buyerId && navigateCustomer(activeOrder.buyerId)}
+                  className="text-xs font-semibold text-brand-600 hover:underline inline-flex items-center gap-1"
                 >
                   <span>{activeOrder.buyerName}</span>
                   <ExternalLink className="w-3 h-3" />
                 </button>
               </div>
-              <div className="flex justify-between">
-                <span className="text-ink-500">Vending Unit:</span>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-ink-500">Phone:</span>
+                <span className="font-mono text-ink-800">{activeOrder.buyerPhone}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-ink-500">Machine:</span>
                 <button
-                  onClick={() => navigateToMachine(activeOrder.machineId)}
-                  className="font-bold text-brand-600 hover:underline flex items-center gap-1"
+                  onClick={() => navigateMachine(activeOrder.machineId)}
+                  className="font-medium text-ink-900 hover:text-brand-600"
                 >
-                  <span>{activeOrder.machineName}</span>
-                  <ExternalLink className="w-3 h-3" />
+                  {activeOrder.machineName} ({activeOrder.machineId})
                 </button>
               </div>
-              <div className="flex justify-between font-mono">
-                <span className="text-ink-500">Banking UTR:</span>
-                <span className="truncate max-w-[170px]">{activeOrder.utr}</span>
-              </div>
             </div>
 
-            {/* Financial Ledger Breakdown */}
-            <div className="space-y-1.5 text-xs">
-              <p className="font-bold text-ink-900 mb-1">Financial Reconciliation</p>
-              <div className="flex justify-between text-ink-600">
-                <span>Retail Price:</span>
-                <span className="font-mono">₹{activeOrder.amount}</span>
-              </div>
-              <div className="flex justify-between text-ink-600">
-                <span>Promotional Discount:</span>
-                <span className="font-mono text-rose-600">-₹{activeOrder.discount}</span>
-              </div>
-              <div className="flex justify-between text-ink-900 font-bold border-t border-line pt-1">
-                <span>Net Collected:</span>
-                <span className="font-mono">₹{activeOrder.netAmount}</span>
-              </div>
-              <div className="flex justify-between text-[11px] text-ink-400">
-                <span>COGS Material Basis:</span>
-                <span className="font-mono">₹{activeOrder.costBasis}</span>
-              </div>
-            </div>
-
-            {/* The Real Dispense Log (Crucial specification from workflow) */}
+            {/* Sensor Telemetry Box */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="font-bold text-xs text-ink-900">
-                  Dispense Sensor Telemetry
-                </p>
-                {activeOrder.dispenseLog.variancePct > 15 ? (
-                  <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded">
-                    ⚠️ Variance {activeOrder.dispenseLog.variancePct}% (High)
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-bold text-leaf-600 bg-leaf-50 px-2 py-0.5 rounded">
-                    ✓ Nominal ({activeOrder.dispenseLog.variancePct}%)
-                  </span>
-                )}
+              <h4 className="text-xs font-bold text-ink-700 uppercase tracking-wider">
+                Dispense Sensor Ground Truth
+              </h4>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="p-2.5 bg-ink-50 rounded-lg">
+                  <p className="text-[10px] text-ink-400 uppercase font-semibold">Valve Open</p>
+                  <p className="font-mono font-bold text-ink-900 mt-0.5">
+                    {activeOrder.dispenseLog.valveOpenMs} ms
+                  </p>
+                </div>
+                <div className="p-2.5 bg-ink-50 rounded-lg">
+                  <p className="text-[10px] text-ink-400 uppercase font-semibold">Flow Pulses</p>
+                  <p className="font-mono font-bold text-ink-900 mt-0.5">
+                    {activeOrder.dispenseLog.flowPulses} pulses
+                  </p>
+                </div>
+                <div className="p-2.5 bg-ink-50 rounded-lg">
+                  <p className="text-[10px] text-ink-400 uppercase font-semibold">Volume Expected</p>
+                  <p className="font-mono font-bold text-ink-900 mt-0.5">
+                    {activeOrder.dispenseLog.expectedMl} ml
+                  </p>
+                </div>
+                <div className="p-2.5 bg-ink-50 rounded-lg">
+                  <p className="text-[10px] text-ink-400 uppercase font-semibold">Volume Dispensed</p>
+                  <p className="font-mono font-bold text-ink-900 mt-0.5">
+                    {activeOrder.dispenseLog.dispensedMl} ml
+                  </p>
+                </div>
               </div>
 
-              <div className="bg-page/70 rounded-xl p-3 text-xs space-y-1.5 font-mono text-ink-700">
-                <div className="flex justify-between">
-                  <span className="text-ink-500">Valve Open Time:</span>
-                  <span>{activeOrder.dispenseLog.valveOpenMs} ms</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-ink-500">Flow Pulses:</span>
-                  <span>{activeOrder.dispenseLog.flowPulses} pulses</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-ink-500">Expected vs Dispensed:</span>
-                  <span>
-                    {activeOrder.dispenseLog.expectedMl}ml / {activeOrder.dispenseLog.dispensedMl}ml
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-ink-500">Cup Drop Detected:</span>
-                  <span
-                    className={
-                      activeOrder.dispenseLog.cupDetected
-                        ? 'text-leaf-600 font-bold'
-                        : 'text-rose-600 font-bold'
-                    }
-                  >
-                    {activeOrder.dispenseLog.cupDetected ? 'YES' : 'NO'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-ink-500">Customer Pickup:</span>
-                  <span>
-                    {activeOrder.dispenseLog.pickupDetected ? 'DETECTED' : 'NOT DETECTED'}
-                  </span>
-                </div>
-                <div className="flex justify-between pt-1 border-t border-line text-[11px]">
-                  <span className="text-ink-500">Mounted Tank at Pour:</span>
-                  <span className="text-brand-600">{activeOrder.tankUid}</span>
-                </div>
+              {/* Variance Chip */}
+              <div
+                className={`p-2.5 rounded-lg border flex items-center justify-between text-xs ${
+                  Math.abs(activeOrder.dispenseLog.variancePct) > 15
+                    ? 'bg-rose-50 border-rose-200 text-rose-800'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                }`}
+              >
+                <span className="font-medium">Measured Sensor Variance:</span>
+                <span className="font-mono font-bold text-sm">
+                  {activeOrder.dispenseLog.variancePct}%
+                </span>
               </div>
             </div>
 
-            {/* Actions for Order */}
-            <div className="pt-2 border-t border-line space-y-2">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => openDisputeForOrder(activeOrder.id)}
-                  className="flex-1 py-2 px-3 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 shadow-xs"
-                >
-                  <Headset className="w-3.5 h-3.5" />
-                  <span>Open Dispute Desk</span>
-                </button>
-                <button
-                  onClick={() => setStubOrder(activeOrder)}
-                  className="py-2 px-3 border border-line bg-page hover:bg-white text-ink-700 rounded-lg text-xs font-semibold flex items-center gap-1"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>A5 Stub</span>
-                </button>
-              </div>
+            {/* Quick Actions */}
+            <div className="pt-2 space-y-2">
+              <button
+                onClick={() => {
+                  refundOrder(activeOrder.id, 'UPI_SOURCE');
+                  sonnerToast.success(`Refund initiated for ${activeOrder.orderNo} to UPI`);
+                }}
+                className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Issue Refund (₹{activeOrder.netAmount})</span>
+              </button>
 
-              <div className="flex gap-2">
-                <button
-                  onClick={() => refundOrder(activeOrder.id, 'Operator manual refund')}
-                  className="flex-1 py-1.5 border border-rose-200 text-rose-700 hover:bg-rose-50 rounded-lg text-xs font-semibold"
-                >
-                  Refund Order
-                </button>
-                <button
-                  onClick={() => markOrderFraud(activeOrder.id)}
-                  className="flex-1 py-1.5 border border-line text-ink-600 hover:bg-page rounded-lg text-xs font-medium"
-                >
-                  Flag Fraud
-                </button>
-              </div>
+              <button
+                onClick={() => router.push('/support/tickets/TCK-8921')}
+                className="w-full py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-700" />
+                <span>Open in Dispute Desk</span>
+              </button>
             </div>
           </div>
         )}
       </div>
-
-      {/* A5 Print Stub Modal (/orders/:id/label) */}
-      {stubOrder && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
-          <div className="bg-white border border-line rounded-2xl p-6 max-w-sm w-full shadow-pop text-ink-900 font-mono">
-            <div className="text-center pb-3 border-b-2 border-dashed border-line">
-              <h2 className="text-base font-bold tracking-tight">MANHATTAN COFFEE</h2>
-              <p className="text-[11px] text-ink-500">Automated Vending Network</p>
-              <p className="text-[10px] text-ink-400 mt-1">FSSAI Lic: 11526999000142</p>
-            </div>
-
-            <div className="py-3 text-xs space-y-1.5 border-b-2 border-dashed border-line">
-              <div className="flex justify-between">
-                <span>ORDER:</span>
-                <span className="font-bold">{stubOrder.orderNo}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>TIME:</span>
-                <span>{stubOrder.time}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>MACHINE:</span>
-                <span>{stubOrder.machineName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>ITEM:</span>
-                <span className="font-bold">{stubOrder.variant}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>PAYMENT:</span>
-                <span>{stubOrder.paymentMethod}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>UTR:</span>
-                <span className="truncate max-w-[180px]">{stubOrder.utr}</span>
-              </div>
-            </div>
-
-            <div className="py-3 flex justify-between font-bold text-sm">
-              <span>TOTAL PAID:</span>
-              <span>₹{stubOrder.netAmount}.00</span>
-            </div>
-
-            <div className="text-center text-[10px] text-ink-400 py-2">
-              Thank you for brewing with us!
-              <br />
-              Need help? WhatsApp +91 98200 11999
-            </div>
-
-            <div className="pt-3 flex gap-2">
-              <button
-                onClick={() => setStubOrder(null)}
-                className="flex-1 py-2 rounded-lg border border-line text-xs font-sans font-medium text-ink-600 hover:bg-page"
-              >
-                Close
-              </button>
-              <button
-                onClick={() => {
-                  window.print();
-                  toast('Print job sent to system spooler', 'success');
-                }}
-                className="flex-1 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-sans font-semibold shadow-xs"
-              >
-                Print Receipt
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
+
+  function navigateMachine(id: string) {
+    navigateToMachine(id);
+  }
+
+  function navigateCustomer(id: string) {
+    navigateToCustomer(id);
+  }
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { toast as sonnerToast } from 'sonner';
 import { useAdmin } from '@/lib/admin-context';
 import { Machine } from '@/lib/types';
 import {
@@ -138,142 +139,190 @@ export default function MachinesModule() {
       </div>
 
       {/* Fleet Cards Grid (Card Grid per specification, high density) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filteredMachines.map((m) => {
           const isSelected = m.id === activeMachine.id;
+          const hasCriticalFault = m.activeFaults.length > 0 || m.status === 'WARNING';
+          const milkPct = Math.min(100, Math.round((m.milkLiters / m.maxMilkLiters) * 100));
+          const maxCups = m.maxCups || 250;
+          const cupsPct = Math.min(100, Math.round((m.cupsCount / maxCups) * 100));
+
           return (
             <div
               key={m.id}
               onClick={() => setSelectedMachineId(m.id)}
-              className={`card p-4.5 transition cursor-pointer relative ${
-                isSelected
-                  ? 'border-brand-500 ring-2 ring-brand-500/10 shadow-sm'
-                  : 'hover:border-ink-300'
+              className={`card p-5 transition cursor-pointer relative overflow-hidden flex flex-col justify-between ${
+                hasCriticalFault
+                  ? 'border-2 border-rose-500 shadow-md shadow-rose-500/10 ring-1 ring-rose-500/20'
+                  : isSelected
+                  ? 'border-brand-500 ring-2 ring-brand-500/20 shadow-sm'
+                  : 'hover:border-ink-300 hover:shadow-xs'
               }`}
             >
-              {/* Warning ribbon if fault exists */}
-              {m.activeFaults.length > 0 && (
-                <div className="absolute top-0 right-0 bg-amber2-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-lg rounded-tr-xl flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3" />
-                  <span>NEEDS ATTENTION</span>
+              {/* Warning Ribbon if critical fault is unresolved */}
+              {hasCriticalFault && (
+                <div className="absolute top-0 right-0 bg-rose-600 text-white text-[10px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded-bl-lg flex items-center gap-1 shadow-xs animate-pulse">
+                  <AlertTriangle className="w-3 h-3 text-white" />
+                  <span>CRITICAL FAULT</span>
                 </div>
               )}
 
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2.5">
-                  <span
-                    className={`w-9 h-9 rounded-lg flex items-center justify-center text-lg ${
-                      m.mode === 'HOT'
-                        ? 'bg-brand-50 text-brand-600'
-                        : 'bg-amber2-50 text-amber2-600'
-                    }`}
-                  >
-                    {m.mode === 'HOT' ? '🏪' : '🧊'}
-                  </span>
+              <div>
+                {/* Header: Machine Name, Status, Mode */}
+                <div className="flex items-start justify-between gap-2 pr-12">
                   <div>
-                    <h3 className="font-bold text-[14px] text-ink-900 leading-tight">
-                      {m.name}
-                    </h3>
-                    <p className="text-[11px] text-ink-400 font-mono mt-0.5">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-[15px] text-ink-900 leading-tight">
+                        {m.name}
+                      </h3>
+                      {/* Mode Chip (HOT / COLD) */}
+                      <span
+                        className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full tracking-wider ${
+                          m.mode === 'HOT'
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                            : 'bg-cyan-100 text-cyan-800 border border-cyan-300'
+                        }`}
+                      >
+                        {m.mode === 'HOT' ? '🔥 HOT' : '❄️ COLD'}
+                      </span>
+                    </div>
+                    <p className="text-[11.5px] text-ink-400 font-mono mt-0.5">
                       {m.code} · {m.city}
                     </p>
                   </div>
+
+                  {/* Status Badge */}
+                  <span
+                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 shrink-0 ${
+                      m.status === 'ONLINE'
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        : 'bg-rose-50 text-rose-700 border border-rose-200'
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        m.status === 'ONLINE' ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
+                      }`}
+                    />
+                    {m.status}
+                  </span>
                 </div>
 
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                    m.status === 'ONLINE'
-                      ? 'bg-leaf-50 text-leaf-600'
-                      : 'bg-rose-50 text-rose-600'
-                  }`}
-                >
-                  {m.status}
-                </span>
+                <p className="text-[12px] text-ink-600 mt-2 truncate flex items-center gap-1.5">
+                  <span className="text-ink-400">📍</span> {m.location}
+                </p>
+
+                {/* Live Telemetry Display */}
+                <div className="grid grid-cols-3 gap-2.5 py-3.5 my-3 border-y border-line/80 bg-ink-50/50 rounded-xl px-3">
+                  {/* Temp Gauge */}
+                  <div>
+                    <div className="flex items-center gap-1 text-[10px] text-ink-500 uppercase font-semibold">
+                      <Thermometer className="w-3 h-3 text-brand-600" />
+                      <span>Temp</span>
+                    </div>
+                    <p className="text-[14px] font-bold text-ink-900 font-mono mt-0.5">
+                      {m.temp.toFixed(1)}°C
+                    </p>
+                    <span className="text-[9.5px] text-ink-400 font-mono">
+                      tgt: {m.targetTemp}°C
+                    </span>
+                  </div>
+
+                  {/* Milk Level Bar */}
+                  <div>
+                    <div className="flex items-center justify-between text-[10px] text-ink-500 uppercase font-semibold">
+                      <span>Milk</span>
+                      <span className="font-mono text-ink-700 font-bold">{m.milkLiters}L</span>
+                    </div>
+                    <div className="w-full bg-ink-200 rounded-full h-1.5 mt-1.5 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          milkPct < 25 ? 'bg-rose-500' : 'bg-brand-500'
+                        }`}
+                        style={{ width: `${milkPct}%` }}
+                      />
+                    </div>
+                    <span className="text-[9.5px] text-ink-400 font-mono mt-0.5 block">
+                      {milkPct}% of {m.maxMilkLiters}L
+                    </span>
+                  </div>
+
+                  {/* Cup Count Bar */}
+                  <div>
+                    <div className="flex items-center justify-between text-[10px] text-ink-500 uppercase font-semibold">
+                      <span>Cups</span>
+                      <span className="font-mono text-ink-700 font-bold">{m.cupsCount}</span>
+                    </div>
+                    <div className="w-full bg-ink-200 rounded-full h-1.5 mt-1.5 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          cupsPct < 25 ? 'bg-amber-500' : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${cupsPct}%` }}
+                      />
+                    </div>
+                    <span className="text-[9.5px] text-ink-400 font-mono mt-0.5 block">
+                      {cupsPct}% of {maxCups}
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <p className="text-[11.5px] text-ink-500 mt-2 truncate">
-                📍 {m.location}
-              </p>
-
-              {/* Metrics strip */}
-              <div className="grid grid-cols-3 gap-2 py-3 my-2 border-y border-line text-center">
-                <div>
-                  <p className="text-[10px] text-ink-400 uppercase font-semibold">
-                    Temp
-                  </p>
-                  <p className="text-[13px] font-bold text-ink-900 font-mono mt-0.5">
-                    {m.temp.toFixed(1)}°C
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-ink-400 uppercase font-semibold">
-                    Milk Level
-                  </p>
-                  <p className="text-[13px] font-bold text-ink-900 font-mono mt-0.5">
-                    {m.milkLiters}L
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-ink-400 uppercase font-semibold">
-                    Cups
-                  </p>
-                  <p className="text-[13px] font-bold text-ink-900 font-mono mt-0.5">
-                    {m.cupsCount}
-                  </p>
-                </div>
-              </div>
-
-              {/* Quick actions */}
+              {/* Quick Actions (Icons) */}
               <div className="flex items-center justify-between pt-1">
-                <div className="flex items-center gap-1.5 text-[11px] text-ink-400 font-mono">
-                  <Wifi className="w-3 h-3 text-leaf-500" />
+                <div className="flex items-center gap-1.5 text-[11px] text-ink-500 font-mono">
+                  <Wifi className="w-3.5 h-3.5 text-emerald-600" />
                   <span>{m.signalDbm} dBm</span>
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  {/* Lock / Unlock Quick Action */}
                   {m.isLocked ? (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
+                      onClick={() => {
                         unlockMachine(m.id);
+                        sonnerToast.success(`Machine ${m.code} unlocked`);
                       }}
-                      className="px-2 py-1 rounded bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-semibold flex items-center gap-1"
+                      className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer"
+                      title="Unlock Machine"
                     >
-                      <Unlock className="w-3 h-3" />
-                      <span>Unlock</span>
+                      <Unlock className="w-3.5 h-3.5" />
                     </button>
                   ) : (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
+                      onClick={() => {
                         lockMachine(m.id);
+                        sonnerToast.warning(`Machine ${m.code} locked remotely`);
                       }}
-                      className="px-2 py-1 rounded border border-line hover:bg-page text-ink-700 text-[11px] font-semibold flex items-center gap-1"
+                      className="p-1.5 rounded-lg border border-line hover:bg-ink-100 text-ink-700 transition cursor-pointer"
+                      title="Lock Machine"
                     >
-                      <Lock className="w-3 h-3" />
-                      <span>Lock</span>
+                      <Lock className="w-3.5 h-3.5" />
                     </button>
                   )}
 
+                  {/* Remote Reboot */}
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
+                    onClick={() => {
                       rebootMachine(m.id);
+                      sonnerToast.info(`Reboot MQTT packet dispatched to ${m.code}`);
                     }}
-                    className="p-1 rounded border border-line hover:bg-page text-ink-600"
-                    title="Reboot ESP32 controller"
+                    className="p-1.5 rounded-lg border border-line hover:bg-ink-100 text-ink-700 transition cursor-pointer"
+                    title="Reboot Controller"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                   </button>
 
+                  {/* Test Dispense */}
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
+                    onClick={() => {
                       testDispense(m.id);
+                      sonnerToast.success(`Test dispense triggered on ${m.code} (50ml flush)`);
                     }}
-                    className="px-2 py-1 rounded bg-brand-50 hover:bg-brand-100 text-brand-600 text-[11px] font-semibold flex items-center gap-1"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-brand-50 hover:bg-brand-100 text-brand-700 text-xs font-semibold border border-brand-200 transition cursor-pointer"
+                    title="Test Dispense"
                   >
-                    <PlayCircle className="w-3 h-3" />
+                    <PlayCircle className="w-3.5 h-3.5" />
                     <span>Test</span>
                   </button>
                 </div>

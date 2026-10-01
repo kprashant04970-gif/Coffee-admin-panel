@@ -40,6 +40,7 @@ export interface Machine {
   milkLiters: number;
   maxMilkLiters: number;
   cupsCount: number;
+  maxCups?: number;
   kitsCount: number;
   signalDbm: number;
   lastSeen: string;
