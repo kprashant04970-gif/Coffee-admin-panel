@@ -2,73 +2,53 @@
  * Manhattan Coffee Vending Network — Database Client Abstraction
  * File: lib/db/client.ts
  *
- * Implements a strongly-typed client interface conforming to `types/database.ts`.
- * Supports both live Supabase client connection (when NEXT_PUBLIC_SUPABASE_URL and
- * NEXT_PUBLIC_SUPABASE_ANON_KEY are present) and resilient typed in-memory storage.
+ * Implements a strongly-typed Supabase client interface conforming to `types/database.ts`
+ * using the official `@supabase/supabase-js` SDK.
  */
 
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/database';
 
-export interface DbClientConfig {
-  supabaseUrl?: string;
-  supabaseAnonKey?: string;
-}
+const supabaseUrl =
+  process.env.SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  'https://manhattan-coffee.supabase.co';
+
+const supabaseAnonKey =
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  'anon-key-placeholder';
+
+export const supabase: SupabaseClient<Database> = createClient<Database>(
+  supabaseUrl,
+  supabaseAnonKey
+);
 
 export class AppDatabaseClient {
   private static instance: AppDatabaseClient;
-  private url?: string;
-  private anonKey?: string;
+  public client: SupabaseClient<Database>;
 
-  private constructor(config?: DbClientConfig) {
-    this.url = config?.supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    this.anonKey = config?.supabaseAnonKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  private constructor() {
+    this.client = supabase;
   }
 
-  public static getInstance(config?: DbClientConfig): AppDatabaseClient {
+  public static getInstance(): AppDatabaseClient {
     if (!AppDatabaseClient.instance) {
-      AppDatabaseClient.instance = new AppDatabaseClient(config);
+      AppDatabaseClient.instance = new AppDatabaseClient();
     }
     return AppDatabaseClient.instance;
   }
 
-  get isConfigured(): boolean {
-    return Boolean(this.url && this.anonKey);
-  }
-
-  // Type helper for table queries
   public from<T extends keyof Database['public']['Tables']>(table: T) {
-    return {
-      table,
-      select: () => ({ table, action: 'SELECT' }),
-      insert: (data: Database['public']['Tables'][T]['Insert']) => ({ table, action: 'INSERT', data }),
-      update: (data: Database['public']['Tables'][T]['Update']) => ({ table, action: 'UPDATE', data }),
-    };
+    return this.client.from(table);
   }
 
-  // Type helper for RPC calls (e.g. fn_ticket_evidence_bundle)
   public async rpc<F extends keyof Database['public']['Functions']>(
     fn: F,
     args: Database['public']['Functions'][F]['Args']
-  ): Promise<{ data: Database['public']['Functions'][F]['Returns'] | null; error: Error | null }> {
-    if (!this.isConfigured) {
-      return { data: { simulated: true, function: fn, args } as Database['public']['Functions'][F]['Returns'], error: null };
-    }
-    // Live Supabase RPC call
-    try {
-      const res = await fetch(`${this.url}/rest/v1/rpc/${fn}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': this.anonKey!,
-          'Authorization': `Bearer ${this.anonKey!}`,
-        },
-        body: JSON.stringify(args),
-      });
-      const data = await res.json();
-      return { data, error: null };
-    } catch (err: unknown) {
-      return { data: null, error: err instanceof Error ? err : new Error(String(err)) };
-    }
+  ) {
+    // Calls official Supabase RPC
+    return (this.client.rpc as any)(fn, args);
   }
 }
 

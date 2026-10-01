@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { AdminProvider } from '@/lib/admin-context';
+import { Toaster } from 'sonner';
 
 export const metadata: Metadata = {
   title: 'Manhattan Coffee — Admin Console & Routing Architecture',
@@ -25,7 +26,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body suppressHydrationWarning className="bg-page text-ink-900 antialiased selection:bg-brand-100 selection:text-brand-700">
-        <AdminProvider>{children}</AdminProvider>
+        <AdminProvider>
+          {children}
+          <Toaster position="top-right" richColors />
+        </AdminProvider>
       </body>
     </html>
   );

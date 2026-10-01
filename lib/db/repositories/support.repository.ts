@@ -1,12 +1,12 @@
-import { db } from '../client';
+import { supabase, db } from '../client';
 import { Database } from '@/types/database';
 
 export type TicketRow = Database['public']['Tables']['support_tickets']['Row'];
 
 export class SupportRepository {
   public static async getTicketById(id: string): Promise<TicketRow | null> {
-    db.from('support_tickets').select();
-    return null;
+    const { data } = await (supabase.from('support_tickets') as any).select('*').eq('id', id).single();
+    return data as TicketRow | null;
   }
 
   public static async fetchEvidenceBundle(ticketId: string) {
