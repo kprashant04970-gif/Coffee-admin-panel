@@ -1,0 +1,6 @@
+{
+  "name": "Manhattan Coffee — Admin Console & Routing Architecture",
+  "description": "Complete operations and growth administration platform for Manhattan Coffee vending network, featuring full 9-module routing architecture, live telemetry, dispute desk, RBAC, and fleet management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
