@@ -41,6 +41,7 @@ body {
   background-color: var(--color-page, #F7F8FA);
   color: var(--color-ink-900, #1A1D23);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 ::-webkit-scrollbar {
@@ -61,6 +62,7 @@ body {
   background: #ffffff;
   border: 1px solid #EDEFF2;
   border-radius: 14px;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .pulse-dot {
@@ -103,4 +105,171 @@ body {
   height: 100%;
   border-radius: 99px;
   transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ========================================================
+   1. DARK THEME SPECIFICATION (OLED Slate & Linear Style)
+   ======================================================== */
+html.dark {
+  color-scheme: dark;
+}
+
+html.dark body {
+  background-color: #0A0D14;
+  color: #F1F5F9;
+}
+
+html.dark .card {
+  background-color: #111722;
+  border-color: #1E293B;
+  color: #F1F5F9;
+}
+
+html.dark header {
+  background-color: #111722 !important;
+  border-color: #1E293B !important;
+  color: #F1F5F9 !important;
+}
+
+html.dark aside {
+  background-color: #0D121D !important;
+  border-color: #1E293B !important;
+  color: #F1F5F9 !important;
+}
+
+html.dark .bg-white {
+  background-color: #111722 !important;
+  color: #F1F5F9 !important;
+}
+
+html.dark .bg-page {
+  background-color: #0A0D14 !important;
+}
+
+html.dark .border-line {
+  border-color: #1E293B !important;
+}
+
+html.dark .divide-line > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1E293B !important;
+}
+
+html.dark .text-ink-900 {
+  color: #F8FAFC !important;
+}
+
+html.dark .text-ink-700 {
+  color: #E2E8F0 !important;
+}
+
+html.dark .text-ink-600 {
+  color: #CBD5E1 !important;
+}
+
+html.dark .text-ink-500 {
+  color: #94A3B8 !important;
+}
+
+html.dark .text-ink-400 {
+  color: #64748B !important;
+}
+
+html.dark .bg-ink-50,
+html.dark .bg-ink-100 {
+  background-color: #1E293B !important;
+  color: #F1F5F9 !important;
+}
+
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: #0F172A !important;
+  border-color: #334155 !important;
+  color: #F8FAFC !important;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
+/* ========================================================
+   2. HIGH CONTRAST MODE (Anti-Glare / Warehouse / Low-Vision)
+   ======================================================== */
+html.high-contrast {
+  --contrast-edge: #000000;
+}
+
+html.high-contrast body {
+  background-color: #FFFFFF !important;
+  color: #000000 !important;
+}
+
+html.high-contrast .card {
+  border: 2px solid #000000 !important;
+  box-shadow: 0 0 0 1px #000000 !important;
+  background-color: #FFFFFF !important;
+}
+
+html.high-contrast button {
+  border: 2px solid #000000 !important;
+  font-weight: 700 !important;
+}
+
+html.high-contrast .text-ink-500,
+html.high-contrast .text-ink-400 {
+  color: #111827 !important;
+  font-weight: 500;
+}
+
+html.dark.high-contrast body {
+  background-color: #000000 !important;
+  color: #FFFFFF !important;
+}
+
+html.dark.high-contrast .card {
+  border: 2px solid #FFFFFF !important;
+  box-shadow: 0 0 0 1px #FFFFFF !important;
+  background-color: #000000 !important;
+}
+
+html.dark.high-contrast button {
+  border: 2px solid #FFFFFF !important;
+  font-weight: 700 !important;
+}
+
+html.dark.high-contrast .text-ink-500,
+html.dark.high-contrast .text-ink-400 {
+  color: #E2E8F0 !important;
+  font-weight: 500;
+}
+
+/* ========================================================
+   3. COMPACT DENSITY MODE (Dense Telemetry Surveillance)
+   ======================================================== */
+html.compact-density .card {
+  padding: 0.75rem !important;
+}
+
+html.compact-density table th,
+html.compact-density table td {
+  padding-top: 0.35rem !important;
+  padding-bottom: 0.35rem !important;
+  padding-left: 0.5rem !important;
+  padding-right: 0.5rem !important;
+  font-size: 11px !important;
+}
+
+html.compact-density .p-4,
+html.compact-density .p-5,
+html.compact-density .p-6 {
+  padding: 0.75rem !important;
+}
+
+html.compact-density .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0.75rem !important;
+}
+
+html.compact-density .gap-5,
+html.compact-density .gap-6 {
+  gap: 0.75rem !important;
 }

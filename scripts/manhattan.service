@@ -1,0 +1,28 @@
+# ==============================================================================
+# Manhattan Coffee — Systemd Service Unit
+# File: /etc/systemd/system/manhattan.service
+# ==============================================================================
+
+[Unit]
+Description=Manhattan Coffee Next.js Admin Panel
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/manhattan/app
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=DATABASE_URL=postgresql://manhattan_user:manhattan_secure_pass@localhost:5432/manhattan_coffee
+Environment=JWT_SECRET=manhattan_coffee_vps_master_jwt_secret_2026_prod
+Environment=UPLOAD_DIR=/var/www/manhattan/uploads
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=manhattan-admin
+
+[Install]
+WantedBy=multi-user.target

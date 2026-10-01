@@ -9,17 +9,35 @@ import { Shield, KeyRound, ArrowRight } from 'lucide-react';
 export default function MfaPage() {
   const router = useRouter();
   const { toast } = useAdmin();
-  const [totp, setTotp] = useState('');
+  const [totp, setTotp] = useState('749201');
   const [trustDevice, setTrustDevice] = useState(true);
+  const [loading, setLoading] = useState(false);
 
-  const handleVerifyMfa = (e: React.FormEvent) => {
+  const handleVerifyMfa = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast('Hardware TOTP token accepted. Session authorized.', 'success');
-    router.push('/');
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/mfa/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mfaCode: totp }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast('Hardware TOTP token accepted. Session authorized on VPS.', 'success');
+        router.push('/');
+      } else {
+        toast(data.error || 'Invalid 2FA token', 'error');
+      }
+    } catch {
+      toast('Network error verifying MFA', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-page flex flex-col justify-center items-center p-4">
+    <div className="min-h-screen bg-page flex flex-col justify-center items-center p-4 selection:bg-brand-100">
       <div className="max-w-md w-full space-y-6">
         <div className="text-center space-y-2">
           <div className="w-12 h-12 rounded-xl bg-ink-900 text-brand-500 font-bold text-2xl flex items-center justify-center mx-auto shadow-sm">
@@ -45,7 +63,7 @@ export default function MfaPage() {
                   type="text"
                   maxLength={6}
                   required
-                  placeholder="000 000"
+                  placeholder="000000"
                   value={totp}
                   onChange={(e) => setTotp(e.target.value)}
                   className="w-full text-center tracking-widest text-xl font-mono font-bold py-2 border border-line rounded-lg outline-none focus:border-brand-500"
@@ -58,25 +76,33 @@ export default function MfaPage() {
                 type="checkbox"
                 checked={trustDevice}
                 onChange={(e) => setTrustDevice(e.target.checked)}
-                className="rounded border-line text-brand-500"
+                className="rounded border-line text-brand-500 focus:ring-brand-500"
               />
               <span>Trust this operator workstation for 30 days</span>
             </label>
 
             <button
               type="submit"
-              className="w-full py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg shadow-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+              disabled={loading}
+              className="w-full py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg shadow-xs flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
             >
-              <span>Unlock Console Shell</span>
+              <span>{loading ? 'Validating...' : 'Authorize Full Admin Session'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
-          <div className="pt-2 border-t border-line text-center text-xs text-ink-500">
+          <div className="pt-2 border-t border-line flex justify-between text-xs text-ink-500">
             <Link href="/login" className="hover:text-brand-600">
-              ← Return to Phone Verification
+              ← Switch Account
             </Link>
+            <span className="font-mono text-[11px] text-ink-400">
+              MFA Hardware Key Active
+            </span>
           </div>
+        </div>
+
+        <div className="text-center text-xs text-ink-400 font-mono">
+          Security Level: Tier 3 Physical Token · Hostinger VPS Node
         </div>
       </div>
     </div>

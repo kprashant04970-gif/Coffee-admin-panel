@@ -51,6 +51,15 @@ interface NotificationItem {
 interface AdminContextType {
   role: UserRole;
   setRole: (r: UserRole) => void;
+  // Display, Themes & Accessibility
+  themeMode: 'light' | 'dark' | 'auto';
+  setThemeMode: (mode: 'light' | 'dark' | 'auto') => void;
+  resolvedTheme: 'light' | 'dark';
+  highContrast: boolean;
+  setHighContrast: (enabled: boolean) => void;
+  compactDensity: boolean;
+  setCompactDensity: (enabled: boolean) => void;
+
   module: ModuleId;
   setModule: (m: ModuleId) => void;
   // Subview deep links
@@ -136,6 +145,97 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   const [role, setRoleState] = useState<UserRole>('owner');
   const [module, setModuleState] = useState<ModuleId>('dashboard');
 
+  // Display, Themes & Accessibility State (Lazy Initialized from localStorage)
+  const [themeMode, setThemeModeState] = useState<'light' | 'dark' | 'auto'>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('mc_theme_mode');
+        if (saved === 'light' || saved === 'dark' || saved === 'auto') return saved;
+      } catch {
+        // ignore
+      }
+    }
+    return 'auto';
+  });
+
+  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return false;
+  });
+
+  const [highContrast, setHighContrastState] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return localStorage.getItem('mc_high_contrast') === 'true';
+      } catch {
+        // ignore
+      }
+    }
+    return false;
+  });
+
+  const [compactDensity, setCompactDensityState] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return localStorage.getItem('mc_compact_density') === 'true';
+      } catch {
+        // ignore
+      }
+    }
+    return false;
+  });
+
+  // Derived effective theme (avoids synchronous setState in effects)
+  const resolvedTheme: 'light' | 'dark' =
+    themeMode === 'auto' ? (systemPrefersDark ? 'dark' : 'light') : themeMode;
+
+  // Listen to OS theme changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleSystemChange = (e: MediaQueryListEvent) => {
+      setSystemPrefersDark(e.matches);
+    };
+
+    mediaQuery.addEventListener('change', handleSystemChange);
+    return () => mediaQuery.removeEventListener('change', handleSystemChange);
+  }, []);
+
+  // Update HTML DOM classes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const root = document.documentElement;
+    root.classList.toggle('dark', resolvedTheme === 'dark');
+    root.classList.toggle('high-contrast', highContrast);
+    root.classList.toggle('compact-density', compactDensity);
+    root.setAttribute('data-theme', resolvedTheme);
+  }, [resolvedTheme, highContrast, compactDensity]);
+
+  const setThemeMode = (mode: 'light' | 'dark' | 'auto') => {
+    setThemeModeState(mode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mc_theme_mode', mode);
+    }
+  };
+
+  const setHighContrast = (enabled: boolean) => {
+    setHighContrastState(enabled);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mc_high_contrast', String(enabled));
+    }
+  };
+
+  const setCompactDensity = (enabled: boolean) => {
+    setCompactDensityState(enabled);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mc_compact_density', String(enabled));
+    }
+  };
+
   const [selectedMachineId, setSelectedMachineId] = useState<string | null>('MCH-001');
   const [machineActiveTab, setMachineActiveTab] = useState<string>('overview');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -194,12 +294,30 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
 
   const [lastSyncSecs, setLastSyncSecs] = useState(0);
 
-  // Sync clock ticker every 10s
+  // 8-second Live Telemetry Polling (Replaces Supabase Realtime for VPS deployment)
   useEffect(() => {
+    let active = true;
+
+    const pollLiveEndpoints = async () => {
+      try {
+        const res = await fetch('/api/live/dashboard');
+        if (active && res.ok) {
+          setLastSyncSecs(0);
+        }
+      } catch {
+        // Non-blocking network fallback
+      }
+    };
+
     const timer = setInterval(() => {
-      setLastSyncSecs((s) => s + 10);
-    }, 10000);
-    return () => clearInterval(timer);
+      setLastSyncSecs((s) => s + 8);
+      pollLiveEndpoints();
+    }, 8000);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
   }, []);
 
   const toast = (message: string, type: 'info' | 'success' | 'warn' | 'error' = 'info') => {
@@ -712,6 +830,13 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       value={{
         role,
         setRole,
+        themeMode,
+        setThemeMode,
+        resolvedTheme,
+        highContrast,
+        setHighContrast,
+        compactDensity,
+        setCompactDensity,
         module,
         setModule,
         selectedMachineId,

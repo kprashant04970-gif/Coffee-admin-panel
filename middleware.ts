@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { decodeJwt } from 'jose';
+import { jwtVerify } from 'jose';
 import { getRouteGuardRule, authorize, UserRole } from '@/lib/rbac';
 
 // Publicly accessible paths that bypass middleware guards
@@ -14,15 +14,11 @@ const PUBLIC_PATHS = [
   '/favicon.ico',
 ];
 
-interface SessionTokenPayload {
-  sub?: string;
-  email?: string;
-  role?: string;
-  userRole?: string;
-  exp?: number;
-}
+const JWT_SECRET_STRING =
+  process.env.JWT_SECRET || 'manhattan_coffee_vps_master_jwt_secret_2026_prod';
+const JWT_SECRET_KEY = new TextEncoder().encode(JWT_SECRET_STRING);
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 1. Bypass Next.js internal paths, static assets, and public routes
@@ -52,29 +48,32 @@ export function middleware(request: NextRequest) {
 
   if (sessionCookie) {
     try {
-      // Decode JWT payload (works on Edge runtime without Node crypto dependencies)
-      const payload = decodeJwt(sessionCookie) as SessionTokenPayload;
-      const extractedRole = (payload.role || payload.userRole || 'viewer').toLowerCase() as UserRole;
-      userRole = extractedRole;
+      // Cryptographically verify signature using HS256 and JWT_SECRET on Edge
+      const { payload } = await jwtVerify(sessionCookie, JWT_SECRET_KEY, {
+        algorithms: ['HS256'],
+      });
+      userRole = ((payload.role as string) || 'viewer').toLowerCase() as UserRole;
       isAuthenticated = true;
     } catch {
-      // Invalid/tampered token
+      // Signature mismatch, expired, or tampered token
       isAuthenticated = false;
     }
   } else {
     // Development fallback check: Read simulated role header or cookie if present
-    const devRoleHeader = request.headers.get('x-operator-role') || request.cookies.get('mc_operator_role')?.value;
+    const devRoleHeader =
+      request.headers.get('x-operator-role') ||
+      request.cookies.get('mc_operator_role')?.value;
     if (devRoleHeader) {
       userRole = devRoleHeader.toLowerCase() as UserRole;
       isAuthenticated = true;
     } else {
-      // In dev environment default to authenticated session for preview fluidity
+      // Sandbox fallback for interactive preview fluidity
       userRole = 'owner';
       isAuthenticated = true;
     }
   }
 
-  // 4. If completely unauthenticated, redirect to login
+  // 4. If unauthenticated, redirect to login
   if (!isAuthenticated) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
@@ -91,7 +90,7 @@ export function middleware(request: NextRequest) {
     forbiddenUrl.searchParams.set('user_role', userRole);
     forbiddenUrl.searchParams.set('module_name', guardRule.friendlyName);
 
-    // Rewrite to 403 page while maintaining URL context (or redirect)
+    // Rewrite to 403 page while maintaining URL context
     return NextResponse.rewrite(forbiddenUrl);
   }
 

@@ -17,10 +17,26 @@ import {
   RotateCw,
   Lock,
   Layers,
+  Sun,
+  Moon,
+  Laptop,
+  Contrast,
+  Rows3,
 } from 'lucide-react';
 
 export default function SettingsModule() {
-  const { auditLogs, toast, role } = useAdmin();
+  const {
+    auditLogs,
+    toast,
+    role,
+    themeMode,
+    setThemeMode,
+    resolvedTheme,
+    highContrast,
+    setHighContrast,
+    compactDensity,
+    setCompactDensity,
+  } = useAdmin();
   const [subTab, setSubTab] = useState<
     'general' | 'machines' | 'payments' | 'notifications' | 'team' | 'integrations' | 'security' | 'appearance' | 'billing'
   >('general');
@@ -345,12 +361,12 @@ export default function SettingsModule() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           <div className="card p-4 border-line flex items-start justify-between">
             <div>
-              <p className="font-bold text-ink-900">Supabase Cloud Database</p>
-              <p className="text-ink-500 mt-0.5">PostgreSQL partitions + Realtime websocket listener</p>
-              <span className="text-leaf-600 font-bold mt-2 inline-block">● Connected (Latency 24ms)</span>
+              <p className="font-bold text-ink-900">Hostinger VPS PostgreSQL 16</p>
+              <p className="text-ink-500 mt-0.5">Self-hosted native pg.Pool + Local NVMe disk storage</p>
+              <span className="text-leaf-600 font-bold mt-2 inline-block">● Connected (Latency 1ms · Localhost)</span>
             </div>
             <button
-              onClick={() => toast('Supabase connection verified', 'success')}
+              onClick={() => toast('PostgreSQL local socket connection verified', 'success')}
               className="px-2.5 py-1 border border-line rounded hover:bg-page"
             >
               Test
@@ -436,26 +452,165 @@ export default function SettingsModule() {
 
       {/* 8. APPEARANCE */}
       {subTab === 'appearance' && (
-        <div className="card p-6 border-line max-w-2xl space-y-4 text-xs">
-          <h3 className="text-sm font-bold text-ink-900">Brand Color System &amp; Palette</h3>
-          <p className="text-ink-500">
-            Complies with the 60-30-10 palette constitution. Accent budget reserved for high-intent actions.
-          </p>
-          <div className="grid grid-cols-3 gap-3 pt-2">
-            <div className="p-3 rounded-xl border border-line bg-page">
-              <div className="w-8 h-8 rounded-lg bg-brand-500 mb-2 shadow-xs" />
-              <p className="font-bold text-ink-900">Brand Orange</p>
-              <p className="text-[11px] font-mono text-ink-400">#F04E23</p>
+        <div className="space-y-6 max-w-3xl">
+          {/* Theme Mode Card */}
+          <div className="card p-6 border-line space-y-4 text-xs">
+            <div>
+              <h3 className="text-sm font-bold text-ink-900 flex items-center gap-2">
+                <Sun className="w-4 h-4 text-amber-500" />
+                <span>Console Color Theme</span>
+              </h3>
+              <p className="text-ink-500 mt-1">
+                Select your preferred visual theme for prolonged operator shifts. Currently active: <strong className="uppercase font-mono text-brand-600">{resolvedTheme}</strong>.
+              </p>
             </div>
-            <div className="p-3 rounded-xl border border-line bg-page">
-              <div className="w-8 h-8 rounded-lg bg-leaf-500 mb-2 shadow-xs" />
-              <p className="font-bold text-ink-900">Leaf Green</p>
-              <p className="text-[11px] font-mono text-ink-400">#16A34A</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              <button
+                onClick={() => {
+                  setThemeMode('light');
+                  toast('Switched to Light theme', 'info');
+                }}
+                className={`p-4 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                  themeMode === 'light'
+                    ? 'border-brand-500 ring-2 ring-brand-500/20 bg-brand-50/30'
+                    : 'border-line hover:border-ink-300 bg-page'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <Sun className="w-5 h-5 text-amber-500" />
+                  {themeMode === 'light' && <CheckCircle2 className="w-4 h-4 text-brand-500" />}
+                </div>
+                <div>
+                  <p className="font-bold text-ink-900 text-sm">Light Mode</p>
+                  <p className="text-[11px] text-ink-500 mt-0.5">Crisp daytime clarity with standard neutral greys.</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setThemeMode('dark');
+                  toast('Switched to Dark theme (OLED slate)', 'info');
+                }}
+                className={`p-4 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                  themeMode === 'dark'
+                    ? 'border-brand-500 ring-2 ring-brand-500/20 bg-brand-50/30'
+                    : 'border-line hover:border-ink-300 bg-page'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <Moon className="w-5 h-5 text-amber-400" />
+                  {themeMode === 'dark' && <CheckCircle2 className="w-4 h-4 text-brand-500" />}
+                </div>
+                <div>
+                  <p className="font-bold text-ink-900 text-sm">Dark Mode</p>
+                  <p className="text-[11px] text-ink-500 mt-0.5">OLED slate tones designed to prevent eye fatigue.</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setThemeMode('auto');
+                  toast('Auto theme enabled: Syncs with system preferences', 'info');
+                }}
+                className={`p-4 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                  themeMode === 'auto'
+                    ? 'border-brand-500 ring-2 ring-brand-500/20 bg-brand-50/30'
+                    : 'border-line hover:border-ink-300 bg-page'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <Laptop className="w-5 h-5 text-brand-600" />
+                  {themeMode === 'auto' && <CheckCircle2 className="w-4 h-4 text-brand-500" />}
+                </div>
+                <div>
+                  <p className="font-bold text-ink-900 text-sm">Auto Theme</p>
+                  <p className="text-[11px] text-ink-500 mt-0.5">Automatically syncs with your operating system.</p>
+                </div>
+              </button>
             </div>
-            <div className="p-3 rounded-xl border border-line bg-page">
-              <div className="w-8 h-8 rounded-lg bg-amber2-500 mb-2 shadow-xs" />
-              <p className="font-bold text-ink-900">Amber Warn</p>
-              <p className="text-[11px] font-mono text-ink-400">#EAB308</p>
+          </div>
+
+          {/* Accessibility & Density Card */}
+          <div className="card p-6 border-line space-y-4 text-xs">
+            <h3 className="text-sm font-bold text-ink-900 flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-brand-600" />
+              <span>Operational Accessibility &amp; Density</span>
+            </h3>
+
+            {/* High Contrast Toggle */}
+            <div className="p-4 rounded-xl border border-line bg-page flex items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <Contrast className="w-5 h-5 text-brand-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-ink-900 text-sm">High Contrast Mode</p>
+                  <p className="text-[11px] text-ink-500 mt-0.5 leading-relaxed">
+                    Forces 2px stark borders, deep solid backgrounds, and maximum text contrast for bright outdoor sunlight or warehouse terminal glare.
+                  </p>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={highContrast}
+                  onChange={(e) => {
+                    setHighContrast(e.target.checked);
+                    toast(e.target.checked ? 'High Contrast mode active' : 'High Contrast mode disabled', 'info');
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-10 h-6 bg-ink-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-ink-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500" />
+              </label>
+            </div>
+
+            {/* Compact Density Toggle */}
+            <div className="p-4 rounded-xl border border-line bg-page flex items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <Rows3 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-ink-900 text-sm">Compact Density Mode</p>
+                  <p className="text-[11px] text-ink-500 mt-0.5 leading-relaxed">
+                    Compresses table row heights, grid margins, and card padding to display up to 40% more telemetry data on multi-monitor surveillance desks.
+                  </p>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={compactDensity}
+                  onChange={(e) => {
+                    setCompactDensity(e.target.checked);
+                    toast(e.target.checked ? 'Compact Density mode active' : 'Compact Density mode disabled', 'info');
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-10 h-6 bg-ink-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-ink-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600" />
+              </label>
+            </div>
+          </div>
+
+          {/* Palette Reference Card */}
+          <div className="card p-6 border-line space-y-4 text-xs">
+            <h3 className="text-sm font-bold text-ink-900">Brand Color System &amp; Palette Constitution</h3>
+            <p className="text-ink-500">
+              Complies with the 60-30-10 palette constitution. Accent budgets reserved for high-intent actions.
+            </p>
+            <div className="grid grid-cols-3 gap-3 pt-1">
+              <div className="p-3 rounded-xl border border-line bg-page">
+                <div className="w-8 h-8 rounded-lg bg-brand-500 mb-2 shadow-xs" />
+                <p className="font-bold text-ink-900">Brand Orange</p>
+                <p className="text-[11px] font-mono text-ink-400">#F04E23</p>
+              </div>
+              <div className="p-3 rounded-xl border border-line bg-page">
+                <div className="w-8 h-8 rounded-lg bg-leaf-500 mb-2 shadow-xs" />
+                <p className="font-bold text-ink-900">Leaf Green</p>
+                <p className="text-[11px] font-mono text-ink-400">#16A34A</p>
+              </div>
+              <div className="p-3 rounded-xl border border-line bg-page">
+                <div className="w-8 h-8 rounded-lg bg-amber2-500 mb-2 shadow-xs" />
+                <p className="font-bold text-ink-900">Amber Warn</p>
+                <p className="text-[11px] font-mono text-ink-400">#EAB308</p>
+              </div>
             </div>
           </div>
         </div>

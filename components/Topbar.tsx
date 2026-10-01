@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAdmin } from '@/lib/admin-context';
 import { UserRole } from '@/lib/types';
 import { ROLE_PERMISSIONS } from '@/lib/mock-data';
+import ThemeDisplayPopover from '@/components/ThemeDisplayPopover';
 import {
   Menu,
   Search,
@@ -303,6 +304,9 @@ export default function Topbar({ onOpenSidebar }: TopbarProps) {
           </div>
         )}
       </div>
+
+      {/* Theme & Display Appearance Controller */}
+      <ThemeDisplayPopover />
 
       {/* Notifications Popover with Deep Links */}
       <div className="relative" ref={notifRef}>

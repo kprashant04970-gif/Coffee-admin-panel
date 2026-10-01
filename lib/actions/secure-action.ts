@@ -3,14 +3,14 @@
  * File: lib/actions/secure-action.ts
  *
  * Implements a Higher-Order Function (HOF) for Next.js Server Actions that enforces
- * role-based security boundaries, validates JWT session cookies, prevents unauthorized
- * database mutations, and injects caller context for immutable audit logging.
+ * role-based security boundaries, verifies cryptographic JWT signatures with HS256,
+ * prevents unauthorized database mutations, and injects caller context for immutable audit logging.
  */
 
 import { cookies } from 'next/headers';
-import { decodeJwt } from 'jose';
+import { verifySessionToken } from '@/lib/auth/jwt';
 import { hasPermission, PermissionKey, UserRole } from '@/lib/rbac';
-import { supabase } from '@/lib/db/client';
+import { query } from '@/lib/db/client';
 
 export class ForbiddenError extends Error {
   public code = 'FORBIDDEN';
@@ -46,16 +46,8 @@ export type ActionHandler<TInput, TOutput> = (
   context: SecurityContext
 ) => Promise<TOutput>;
 
-interface TokenPayload {
-  sub?: string;
-  userId?: string;
-  email?: string;
-  role?: string;
-  userRole?: string;
-}
-
 /**
- * Extracts and verifies the active operator's session from secure HTTP-only cookies.
+ * Extracts and cryptographically verifies the active operator's session from secure HTTP-only cookies.
  */
 async function getSessionContext(): Promise<SecurityContext> {
   const cookieStore = await cookies();
@@ -66,15 +58,14 @@ async function getSessionContext(): Promise<SecurityContext> {
 
   if (sessionToken) {
     try {
-      const payload = decodeJwt(sessionToken) as TokenPayload;
-      const role = (payload.role || payload.userRole || 'viewer').toLowerCase() as UserRole;
+      const payload = await verifySessionToken(sessionToken);
       return {
-        userId: payload.userId || payload.sub || 'usr_anonymous',
-        userRole: role,
-        email: payload.email || 'operator@manhattancoffee.in',
+        userId: payload.userId,
+        userRole: payload.role,
+        email: payload.email,
       };
     } catch {
-      throw new UnauthorizedError('Tampered or expired session token.');
+      throw new UnauthorizedError('Tampered, invalid, or expired session token.');
     }
   }
 
@@ -107,15 +98,18 @@ async function recordAuditTrail(
   details?: Record<string, unknown>
 ) {
   try {
-    await (supabase.from('audit_logs') as any).insert({
-      user_id: context.userId,
-      user_role: context.userRole,
-      action: event,
-      permission,
-      status,
-      details,
-      created_at: new Date().toISOString(),
-    });
+    await query(
+      `INSERT INTO audit_logs (user_id, user_role, action, permission, status, details)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        context.userId,
+        context.userRole,
+        event,
+        permission,
+        status,
+        details ? JSON.stringify(details) : null,
+      ]
+    );
   } catch {
     // Non-blocking fallback to server stdout
     console.info(`[AUDIT_LOG_FALLBACK] ${status} ${event}`, {
@@ -128,15 +122,6 @@ async function recordAuditTrail(
 
 /**
  * Higher-Order Function (HOF) to wrap Next.js Server Actions with RBAC validation.
- *
- * @example
- * export const approveRefundAction = secureAction(
- *   'finance.refund.approve',
- *   async ({ ticketId, amount }, ctx) => {
- *     // Only executed if user role possesses 'finance.refund.approve' permission
- *     return await SupportRepository.resolveDispute(ticketId, 'APPROVED', 'Ref: UPI', ctx.email);
- *   }
- * );
  */
 export function secureAction<TInput, TOutput>(
   permission: PermissionKey,
@@ -144,7 +129,7 @@ export function secureAction<TInput, TOutput>(
 ) {
   return async (input: TInput): Promise<{ data?: TOutput; error?: string; code?: string }> => {
     try {
-      // 1. Read session context from HTTP-only cookies
+      // 1. Read and cryptographically verify session context from HTTP-only cookies
       const context = await getSessionContext();
 
       // 2. Verify role permissions against the Permission Matrix

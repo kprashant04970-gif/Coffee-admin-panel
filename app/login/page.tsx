@@ -4,25 +4,65 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAdmin } from '@/lib/admin-context';
-import { Lock, ArrowRight, ShieldCheck, Phone } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Mail, Key } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useAdmin();
-  const [phone, setPhone] = useState('+91 98200 11999');
+  const [email, setEmail] = useState('admin@manhattancoffee.in');
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [demoCode, setDemoCode] = useState('888222');
 
-  const handleSendOtp = (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    setOtpSent(true);
-    toast('Security OTP dispatched: 894012 (Demo)', 'info');
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, role: 'owner' }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setOtpSent(true);
+        if (data.demoCode) {
+          setDemoCode(data.demoCode);
+          setOtp(data.demoCode);
+        }
+        toast(`Security OTP dispatched to operator terminal: ${data.demoCode || '888222'}`, 'info');
+      } else {
+        toast(data.error || 'Failed to dispatch OTP', 'error');
+      }
+    } catch {
+      toast('Network error dispatching OTP', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleVerify = (e: React.FormEvent) => {
+  const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast('Operator authentication verified. Redirecting to 2FA...', 'success');
-    router.push('/mfa');
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code: otp, role: 'owner' }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast('Operator identity authenticated. Proceeding to 2FA...', 'success');
+        router.push('/mfa');
+      } else {
+        toast(data.error || 'Invalid OTP code', 'error');
+      }
+    } catch {
+      toast('Verification network error', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -37,7 +77,7 @@ export default function LoginPage() {
             Manhattan<span className="text-brand-500">Coffee</span> Console
           </h1>
           <p className="text-xs text-ink-500">
-            Operator Access · Automated Vending Network
+            Self-Hosted VPS Gateway · Automated Vending Network
           </p>
         </div>
 
@@ -47,15 +87,15 @@ export default function LoginPage() {
             <form onSubmit={handleSendOtp} className="space-y-4 text-xs">
               <div>
                 <label className="block font-semibold text-ink-700 mb-1">
-                  Registered Operator Mobile Number
+                  Registered Operator Email Address
                 </label>
                 <div className="relative">
-                  <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
+                  <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
                   <input
-                    type="tel"
+                    type="email"
                     required
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 border border-line rounded-lg font-mono text-sm outline-none focus:border-brand-500"
                   />
                 </div>
@@ -63,40 +103,45 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg shadow-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+                disabled={loading}
+                className="w-full py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg shadow-xs flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
               >
-                <span>Request Single-Use OTP</span>
+                <span>{loading ? 'Dispatching...' : 'Request Single-Use OTP'}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </form>
           ) : (
             <form onSubmit={handleVerify} className="space-y-4 text-xs">
               <div className="p-3 bg-brand-50 border border-brand-100 rounded-lg text-brand-800">
-                <p className="font-semibold">OTP sent to {phone}</p>
-                <p className="text-[11px] mt-0.5 opacity-90">Demo code: <b>894012</b></p>
+                <p className="font-semibold">OTP dispatched to {email}</p>
+                <p className="text-[11px] mt-0.5 opacity-90">Auto-filled code: <b>{demoCode}</b></p>
               </div>
 
               <div>
                 <label className="block font-semibold text-ink-700 mb-1">
                   Enter 6-Digit Verification Code
                 </label>
-                <input
-                  type="text"
-                  maxLength={6}
-                  required
-                  placeholder="894012"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  className="w-full text-center tracking-widest text-lg font-mono font-bold py-2 border border-line rounded-lg outline-none focus:border-brand-500"
-                />
+                <div className="relative">
+                  <Key className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
+                  <input
+                    type="text"
+                    maxLength={6}
+                    required
+                    placeholder="888222"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    className="w-full text-center tracking-widest text-lg font-mono font-bold py-2 border border-line rounded-lg outline-none focus:border-brand-500"
+                  />
+                </div>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg shadow-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+                disabled={loading}
+                className="w-full py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg shadow-xs flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
               >
                 <ShieldCheck className="w-4 h-4" />
-                <span>Verify &amp; Proceed to MFA</span>
+                <span>{loading ? 'Verifying...' : 'Verify & Proceed to MFA'}</span>
               </button>
             </form>
           )}
@@ -111,9 +156,9 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Machine Teaser Footer */}
+        {/* VPS Fleet Status Teaser Footer */}
         <div className="text-center text-xs text-ink-400 font-mono">
-          Fleet Health: 2 / 2 Units Online · MCH-001 65.4°C · MCH-002 6.2°C
+          VPS Database: PostgreSQL 16 · Native Socket Active · 0 External Dependencies
         </div>
       </div>
     </div>
