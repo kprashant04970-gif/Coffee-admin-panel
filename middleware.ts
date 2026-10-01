@@ -14,9 +14,9 @@ const PUBLIC_PATHS = [
   '/favicon.ico',
 ];
 
-const JWT_SECRET_STRING =
-  process.env.JWT_SECRET || 'manhattan_coffee_vps_master_jwt_secret_2026_prod';
-const JWT_SECRET_KEY = new TextEncoder().encode(JWT_SECRET_STRING);
+// Secret key encoded for HMAC-SHA256 signature verification on Edge
+const JWT_SECRET = process.env.JWT_SECRET || 'manhattan_coffee_vps_master_jwt_secret_2026_prod';
+const JWT_SECRET_KEY = new TextEncoder().encode(JWT_SECRET);
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -48,26 +48,36 @@ export async function middleware(request: NextRequest) {
 
   if (sessionCookie) {
     try {
-      // Cryptographically verify signature using HS256 and JWT_SECRET on Edge
+      // Cryptographically verify signature using jwtVerify with HS256 algorithm and JWT_SECRET
       const { payload } = await jwtVerify(sessionCookie, JWT_SECRET_KEY, {
         algorithms: ['HS256'],
       });
-      userRole = ((payload.role as string) || 'viewer').toLowerCase() as UserRole;
+
+      // Signature is valid: safely extract user role from payload
+      userRole = ((payload.role as string) || (payload.userRole as string) || 'viewer').toLowerCase() as UserRole;
       isAuthenticated = true;
-    } catch {
-      // Signature mismatch, expired, or tampered token
+    } catch (err) {
+      // Invalid signature, expired token, or tampered payload: treat as unauthenticated
+      console.warn(`[Edge Middleware] JWT verification failed for path ${pathname}:`, (err as Error)?.message);
       isAuthenticated = false;
+
+      // Immediately redirect to login on invalid signature
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('redirect', pathname);
+      loginUrl.searchParams.set('error', 'session_invalid');
+      return NextResponse.redirect(loginUrl);
     }
   } else {
-    // Development fallback check: Read simulated role header or cookie if present
+    // If no session token is present, check fallback operator role for local sandbox preview
     const devRoleHeader =
       request.headers.get('x-operator-role') ||
       request.cookies.get('mc_operator_role')?.value;
+
     if (devRoleHeader) {
       userRole = devRoleHeader.toLowerCase() as UserRole;
       isAuthenticated = true;
     } else {
-      // Sandbox fallback for interactive preview fluidity
+      // Default to owner in interactive development preview if unauthenticated
       userRole = 'owner';
       isAuthenticated = true;
     }
